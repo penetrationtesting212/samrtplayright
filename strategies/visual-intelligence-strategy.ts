@@ -1,61 +1,70 @@
 import { Page } from '@playwright/test';
 import { ElementContext, HealingCandidate } from '../../types';
 import { BaseHealingStrategy } from './base-strategy';
-import { VisualIntelligenceEngine, VisualHealingCandidate } from '../../visual/visual-intelligence-engine';
+import * as tf from '@tensorflow/tfjs';
+import { ImageProcessor } from './utils/image-processor';
 
-export class VisualIntelligenceStrategy extends BaseHealingStrategy {
-  private visualEngine: VisualIntelligenceEngine;
+export class EnhancedVisualIntelligenceStrategy extends BaseHealingStrategy {
+  private model: tf.LayersModel | null = null;
+  private isModelLoaded = false;
+  private imageProcessor: ImageProcessor;
+  private featureCache = new Map<string, tf.Tensor>();
 
   constructor(page: Page) {
-    super(page, 'visual-intelligence');
-    this.visualEngine = new VisualIntelligenceEngine(page);
+    super(page, 'enhanced-visual-intelligence');
+    this.priority = 8;
+    this.imageProcessor = ImageProcessor.getInstance();
+    this.initializeModel();
+  }
+
+  private async initializeModel() {
+    try {
+      // Create an advanced CNN model for visual element recognition
+      this.model = this.imageProcessor.createFeatureExtractionModel();
+      this.isModelLoaded = true;
+      console.log('✅ Enhanced Visual Intelligence model initialized with advanced CNN');
+    } catch (error) {
+      console.error('❌ Failed to initialize Enhanced Visual Intelligence model:', error);
+      this.isModelLoaded = false;
+    }
   }
 
   async generateCandidates(context: ElementContext): Promise<HealingCandidate[]> {
+    if (!this.isModelLoaded || !this.model) {
+      console.warn('Enhanced Visual Intelligence model not available, skipping...');
+      return [];
+    }
+
     try {
-      // Use the visual intelligence engine to find similar elements
-      const visualCandidates = await this.visualEngine.findVisuallySimilarElements(
-        context,
-        this.getSimilarityThreshold()
-      );
-
-      // Convert visual candidates to healing candidates
-      const healingCandidates: HealingCandidate[] = [];
-
-      for (const visualCandidate of visualCandidates) {
-        // Validate the candidate
-        if (await this.validateCandidate(visualCandidate.selector)) {
-          // Calculate enhanced confidence based on visual analysis
-          const enhancedConfidence = this.calculateEnhancedConfidence(visualCandidate);
-          
-          healingCandidates.push({
-            selector: visualCandidate.selector,
-            strategy: this.strategyName,
-            score: visualCandidate.score,
-            confidence: enhancedConfidence,
-            features: {
-              visual: visualCandidate.visualSimilarity.overall,
-              size: visualCandidate.visualSimilarity.size,
-              color: visualCandidate.visualSimilarity.color,
-              typography: visualCandidate.visualSimilarity.typography,
-              layout: visualCandidate.visualSimilarity.layout,
-              content: visualCandidate.visualSimilarity.content,
-              shape: visualCandidate.visualSimilarity.shape,
-              screenshot: visualCandidate.screenshotAnalysis ? 0.9 : 0.5,
-              layoutContext: this.calculateLayoutContextScore(visualCandidate.layoutContext)
-            },
-            reasoning: this.generateDetailedReasoning(visualCandidate)
-          });
-        }
+      // Take high-quality screenshot
+      const screenshot = await this.page.screenshot({
+        fullPage: true,
+        type: 'png',
+        quality: 100
+      });
+      
+      // Extract target element features
+      const targetFeatures = await this.extractTargetElementFeatures(context, screenshot);
+      if (!targetFeatures) {
+        console.warn('Could not extract target element features');
+        return [];
       }
 
-      // Sort by confidence and return top candidates
-      return healingCandidates
+      // Find visually similar elements using deep learning
+      const candidates = await this.findAIMatchedElements(targetFeatures, context, screenshot);
+      
+      // Advanced validation and scoring
+      const validatedCandidates = await this.validateAndScoreCandidates(candidates, targetFeatures);
+
+      // Clean up target features
+      targetFeatures.dispose();
+
+      return validatedCandidates
         .sort((a, b) => b.confidence - a.confidence)
-        .slice(0, this.getMaxCandidates());
+        .slice(0, 8); // Top 8 candidates
 
     } catch (error) {
-      console.error('Error in visual intelligence strategy:', error);
+      console.error('Error in enhanced visual intelligence strategy:', error);
       return [];
     }
   }

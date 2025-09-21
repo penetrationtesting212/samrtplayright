@@ -52,7 +52,7 @@ class AnchorProximityStrategy extends BaseHealingStrategy {
 
             const features = {};
             features.attribute = this.calculateAttributeSimilarity(candCtx.attributes || {}, context.attributes);
-            features.structure = candCtx.tagName === context.tagName ? 0.6 .3;
+            features.structure = candCtx.tagName === context.tagName ? 0.6 : 0.3;
             features.text = this.calculateTextSimilarity(candCtx.textContent || '', context.textContent);
             features.visual = 0.0;
 

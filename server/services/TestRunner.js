@@ -1,5 +1,5 @@
-import * as fs from 'fs';
-import { promises as fsp } from 'fs';
+import { promises as fs } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
@@ -22,9 +22,9 @@ class TestRunner {
       console.log('🧪 Initializing Test Runner...');
       
       // Ensure data directory exists
-      await fsp.mkdir(this.dataDir, { recursive: true });
-      await fsp.mkdir(path.join(this.dataDir, 'test-suites'), { recursive: true });
-      await fsp.mkdir(path.join(this.dataDir, 'executions'), { recursive: true });
+      await fs.mkdir(this.dataDir, { recursive: true });
+      await fs.mkdir(path.join(this.dataDir, 'test-suites'), { recursive: true });
+      await fs.mkdir(path.join(this.dataDir, 'executions'), { recursive: true });
       
       // Load existing test suites
       await this.loadTestSuites();
@@ -256,7 +256,16 @@ class TestRunner {
     const executionsDir = path.join(this.dataDir, 'executions');
     await fs.mkdir(executionsDir, { recursive: true });
     const specPath = path.join(executionsDir, `${executionId}.spec.js`);
-    await fs.writeFile(specPath, code);
+    
+    // Ensure the code is properly formatted as a Playwright test
+    let testCode = code;
+    if (!testCode.includes('const { test, expect }') && !testCode.includes('import { test, expect }')) {
+      testCode = `const { test, expect } = require('@playwright/test');
+
+${testCode}`;
+    }
+    
+    await fs.writeFile(specPath, testCode);
 
     try {
       // Ensure progressCallback is a function
@@ -518,14 +527,14 @@ test.describe('${testSuite.name}', () => {
     const dataPath = path.join(__dirname, '${execution.id}-results.json');
     let results = [];
     try {
-      const existing = fs.readFileSync(dataPath, 'utf8');
+      const existing = readFileSync(dataPath, 'utf8');
       results = JSON.parse(existing);
     } catch (e) {
       // File doesn't exist yet
     }
     
     results.push(executionData);
-    fs.writeFileSync(dataPath, JSON.stringify(results, null, 2));
+    writeFileSync(dataPath, JSON.stringify(results, null, 2));
 
     // Take screenshot on failure
     if (testInfo.status === 'failed') {
@@ -622,21 +631,16 @@ test.describe('${testSuite.name}', () => {
 
   async executePlaywrightTest(testFilePath, execution, progressCallback) {
     return new Promise((resolve, reject) => {
-      // Verify test file exists using fs.existsSync
-      if (!fs.existsSync(testFilePath)) {
+      console.log('🔍 DEBUG: Starting executePlaywrightTest');
+      
+      // Verify test file exists using existsSync
+      if (!existsSync(testFilePath)) {
         const errorMsg = `Test file not found: ${testFilePath}`;
         console.error(errorMsg);
         return reject(new Error(errorMsg));
       }
 
-      // Verify Playwright is installed
-      try {
-        require.resolve('@playwright/test');
-      } catch (e) {
-        const error = new Error('Playwright is not installed. Please run: npm install @playwright/test');
-        console.error(error.message);
-        return reject(error);
-      }
+      console.log('🔍 DEBUG: Test file exists, preparing to spawn Playwright');
 
       const args = [
         'playwright',
@@ -648,10 +652,13 @@ test.describe('${testSuite.name}', () => {
 
       console.log(`Executing: npx ${args.join(' ')}`);
       
-      const playwrightProcess = spawn('npx', args, {
+      // Handle Windows PATH issues with npx
+      const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      const playwrightProcess = spawn(command, args, {
         cwd: process.cwd(),
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true  // Use shell for better Windows compatibility
+        shell: process.platform === 'win32', // Use shell only on Windows
+        env: { ...process.env } // Inherit environment variables
       });
 
       let stdout = '';
@@ -719,7 +726,14 @@ test.describe('${testSuite.name}', () => {
       });
 
       playwrightProcess.on('error', (error) => {
-        reject(error);
+        // Convert spawn errors to more user-friendly messages
+        if (error.code === 'ENOENT') {
+          const friendlyError = new Error('Failed to execute Playwright. Please ensure npx is available in your PATH.');
+          friendlyError.originalError = error;
+          reject(friendlyError);
+        } else {
+          reject(error);
+        }
       });
     });
   }
@@ -1329,42 +1343,55 @@ test.describe('${testSuite.name}', () => {
         return;
       }
       
-      // Generate Allure report
-      return new Promise((resolve, reject) => {
-        const allureProcess = spawn('npx', ['allure', 'generate', allureResultsDir, '-o', allureReportDir, '--clean'], {
-          cwd: process.cwd(),
-          stdio: ['pipe', 'pipe', 'pipe']
-        });
-        
-        let stdout = '';
-        let stderr = '';
-        
-        allureProcess.stdout.on('data', (data) => {
-          stdout += data.toString();
-        });
-        
-        allureProcess.stderr.on('data', (data) => {
-          stderr += data.toString();
-        });
-        
-        allureProcess.on('close', (code) => {
-          if (code === 0) {
-            console.log(`Allure report generated successfully for execution: ${executionId}`);
+      // Skip Allure report generation if there are command execution issues
+      // This is a non-critical feature that shouldn't block test execution
+      try {
+        // Generate Allure report
+        return new Promise((resolve, reject) => {
+          // Handle Windows PATH issues with npx
+          const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+          const allureProcess = spawn(command, ['allure', 'generate', allureResultsDir, '-o', allureReportDir, '--clean'], {
+            cwd: process.cwd(),
+            stdio: ['pipe', 'pipe', 'pipe'],
+            shell: process.platform === 'win32', // Use shell on Windows for npx compatibility
+            env: { ...process.env } // Inherit environment variables
+          });
+          
+          let stdout = '';
+          let stderr = '';
+          
+          allureProcess.stdout.on('data', (data) => {
+            stdout += data.toString();
+          });
+          
+          allureProcess.stderr.on('data', (data) => {
+            stderr += data.toString();
+          });
+          
+          allureProcess.on('close', (code) => {
+            if (code === 0) {
+              console.log(`Allure report generated successfully for execution: ${executionId}`);
+              resolve();
+            } else {
+              console.warn(`Allure report generation failed with code ${code}:`, stderr);
+              // Don't reject, just resolve to continue execution
+              resolve();
+            }
+          });
+          
+          allureProcess.on('error', (error) => {
+            console.warn('Allure command failed (non-critical):', error.code === 'ENOENT' ? 'npx command not found in PATH' : error.message);
+            // Don't reject, just resolve to continue execution
             resolve();
-          } else {
-            console.error(`Allure report generation failed with code ${code}:`, stderr);
-            reject(new Error(`Allure generation failed: ${stderr}`));
-          }
+          });
         });
-        
-        allureProcess.on('error', (error) => {
-          console.error('Error running Allure command:', error);
-          reject(error);
-        });
-      });
+      } catch (error) {
+        console.warn('Allure report generation skipped due to error:', error.message);
+        // Non-critical, continue execution
+      }
     } catch (error) {
-      console.error('Error in generateAllureReport:', error);
-      throw error;
+      console.warn('Error in generateAllureReport (non-critical):', error.message);
+      // Non-critical, don't throw
     }
   }
 }

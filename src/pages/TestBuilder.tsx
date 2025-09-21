@@ -63,7 +63,7 @@ export default function TestBuilder() {
   const navigate = useNavigate();
   const [isInspecting, setIsInspecting] = useState(false);
   const [inspectionUrl, setInspectionUrl] = useState('');
-  const [discoveredElements, setDiscoveredElements] = useState<any[]>([]);
+  const [discoveredElements, setDiscoveredElements] = useState<Record<string, any[]>>({});
   const [codegenSessions, setCodegenSessions] = useState<any[]>([]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedSession, setSelectedSession] = useState<string>('');
@@ -514,6 +514,7 @@ export default function TestBuilder() {
 
   const selectAllElements = () => {
     const allElementIds = Object.values(discoveredElements)
+      .filter(Array.isArray)
       .flat()
       .map((element: any) => element.id || element.name);
     setSelectedElements(allElementIds);
@@ -526,6 +527,7 @@ export default function TestBuilder() {
   const addBatchSteps = (testIndex: number, actionType: string) => {
     const currentTest = watch(`tests.${testIndex}`);
     const selectedElementsData = Object.values(discoveredElements)
+      .filter(Array.isArray)
       .flat()
       .filter((element: any) => selectedElements.includes(element.id || element.name));
 
@@ -552,14 +554,14 @@ export default function TestBuilder() {
   const getFilteredElements = () => {
     if (elementFilter === 'all') return discoveredElements;
     
-    const filtered: any = {};
+    const filtered: Record<string, any[]> = {};
     Object.entries(discoveredElements).forEach(([category, elements]: [string, any]) => {
       if (elementFilter === 'interactive') {
-        filtered[category] = elements.filter((el: any) => 
+        filtered[category] = Array.isArray(elements) ? elements.filter((el: any) => 
           ['button', 'input', 'link', 'select'].includes(category.toLowerCase())
-        );
+        ) : [];
       } else if (elementFilter === category.toLowerCase()) {
-        filtered[category] = elements;
+        filtered[category] = Array.isArray(elements) ? elements : [];
       }
     });
     
@@ -640,9 +642,9 @@ export default function TestBuilder() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-5 gap-6">
         {/* Main Form */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-1 xl:col-span-3 space-y-6">
           {/* Basic Information */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
@@ -904,87 +906,196 @@ export default function TestBuilder() {
         </div>
 
         {/* Element Inspector Sidebar */}
-        <div className="space-y-6">
+        <div className="lg:col-span-1 xl:col-span-2 space-y-6">
           {/* Page Inspector */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center mb-4">
-              <Wand2 className="w-5 h-5 text-indigo-600 mr-2" />
-              <h3 className="text-lg font-semibold text-gray-900">AI Element Inspector</h3>
+              <div className="p-2 bg-indigo-100 rounded-lg mr-3">
+                <Wand2 className="w-5 h-5 text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">AI Element Inspector</h3>
+                <p className="text-sm text-gray-600">Discover page elements with AI-powered analysis</p>
+              </div>
             </div>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Page URL to Inspect
                 </label>
-                <input
-                  value={inspectionUrl}
-                  onChange={(e) => setInspectionUrl(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="https://example.com"
-                />
+                <div className="relative">
+                  <input
+                    value={inspectionUrl}
+                    onChange={(e) => setInspectionUrl(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                    placeholder="https://example.com"
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9" />
+                    </svg>
+                  </div>
+                </div>
               </div>
               
               <button
                 onClick={handleInspectPage}
-                disabled={isInspecting}
-                className="w-full inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                disabled={isInspecting || !inspectionUrl.trim()}
+                className="w-full inline-flex items-center justify-center px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 font-medium"
               >
                 {isInspecting ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Inspecting...
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2"></div>
+                    Inspecting Page...
                   </>
                 ) : (
                   <>
                     <Eye className="w-4 h-4 mr-2" />
-                    Inspect Page
+                    Inspect & Discover Elements
                   </>
                 )}
               </button>
+              
+              {/* Help Text */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-start">
+                  <svg className="w-4 h-4 text-blue-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  <div className="text-xs text-blue-800">
+                    <p className="font-medium mb-1">How it works:</p>
+                    <ul className="space-y-1 text-blue-700">
+                      <li>• AI analyzes page elements and interactions</li>
+                      <li>• Generates smart selectors with confidence scores</li>
+                      <li>• Click action buttons to add test steps</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* Empty State for Element Discovery */}
+          {Object.keys(discoveredElements).length === 0 && (
+            <div className="bg-white rounded-xl shadow-sm border-2 border-dashed border-gray-300 p-8">
+              <div className="text-center">
+                <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Eye className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Elements Discovered Yet</h3>
+                <p className="text-sm text-gray-600 mb-4 max-w-sm mx-auto">
+                  Enter a URL above and click "Inspect & Discover Elements" to start finding interactive elements on the page.
+                </p>
+                <div className="flex items-center justify-center space-x-4 text-xs text-gray-500">
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full mr-1"></div>
+                    <span>AI-Powered</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 bg-green-400 rounded-full mr-1"></div>
+                    <span>Smart Selectors</span>
+                  </div>
+                  <div className="flex items-center">
+                    <div className="w-2 h-2 bg-purple-400 rounded-full mr-1"></div>
+                    <span>Auto Healing</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Discovered Elements */}
           {Object.keys(discoveredElements).length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Discovered Elements</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Discovered Elements</h3>
+                <span className="text-sm text-gray-500">
+                  {Object.values(discoveredElements).filter(Array.isArray).flat().length} total
+                </span>
+              </div>
               
-              <div className="space-y-4 max-h-64 overflow-y-auto">
+              <div className="space-y-4 max-h-96 overflow-y-auto">
                 {Object.entries(discoveredElements).map(([category, elements]: [string, any]) => (
-                  <div key={category}>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2 capitalize">
-                      {category} ({elements.length})
-                    </h4>
-                    <div className="space-y-2">
-                      {elements.slice(0, 5).map((element: any, index: number) => (
-                        <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-900">{element.name}</p>
-                              <p className="text-xs text-gray-500 truncate">{element.description}</p>
+                  <div key={category} className="border-b border-gray-100 last:border-b-0 pb-4 last:pb-0">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-semibold text-gray-800 capitalize bg-gray-100 px-3 py-1 rounded-full">
+                        {category} ({Array.isArray(elements) ? elements.length : 0})
+                      </h4>
+                      {Array.isArray(elements) && elements.length > 5 && (
+                        <span className="text-xs text-gray-500">Showing first 5</span>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      {Array.isArray(elements) ? elements.slice(0, 5).map((element: any, index: number) => (
+                        <div key={index} className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200 hover:shadow-sm transition-all">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 truncate" title={element.name}>
+                                {element.name}
+                              </p>
+                              <p className="text-xs text-gray-600 mt-1 line-clamp-2" title={element.description}>
+                                {element.description}
+                              </p>
+                              {element.locator && (
+                                <p className="text-xs text-blue-600 mt-1 font-mono bg-blue-50 px-2 py-1 rounded truncate" title={element.locator}>
+                                  {element.locator}
+                                </p>
+                              )}
                             </div>
-                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                              {element.priority}/10
-                            </span>
+                            <div className="flex flex-col items-end space-y-1 ml-3">
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                                {element.priority}/10
+                              </span>
+                              {element.aiConfidence && (
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                                  AI: {(element.aiConfidence * 100).toFixed(0)}%
+                                </span>
+                              )}
+                            </div>
                           </div>
                           
-                          <div className="flex space-x-1">
+                          <div className="flex flex-wrap gap-1">
                             {stepTypes.slice(1, 4).map((stepType) => (
                               <button
                                 key={stepType.value}
                                 onClick={() => addStepFromElement(0, element, stepType.value)}
-                                className="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors"
+                                className="text-xs px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full hover:bg-indigo-200 transition-colors font-medium"
+                                title={`Add ${stepType.label} step for ${element.name}`}
                               >
                                 {stepType.label}
                               </button>
                             ))}
                           </div>
                         </div>
-                      ))}
+                      )) : (
+                        <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                          <div className="flex items-center">
+                            <svg className="w-4 h-4 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            <p className="text-sm text-yellow-800 font-medium">
+                              Invalid element data format for category: {category}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
+              </div>
+              
+              {/* Element Actions Footer */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>Click actions to add test steps</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                    <span>Priority</span>
+                    <div className="w-2 h-2 bg-green-400 rounded-full ml-2"></div>
+                    <span>AI Confidence</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}

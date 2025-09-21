@@ -89,13 +89,18 @@ class StrategyLoader {
 
       // Compile using TypeScript compiler
       try {
-        execSync(`npx tsc --project "${tempConfigPath}"`, { 
+        const output = execSync(`npx tsc --project "${tempConfigPath}"`, { 
           cwd: path.join(__dirname, '../..'),
-          stdio: 'pipe'
+          stdio: 'pipe',
+          encoding: 'utf8'
         });
         console.log('✅ TypeScript strategies compiled successfully');
+        if (output && output.length > 0) {
+          console.log('Compilation output:', output);
+        }
       } catch (compileError) {
-        console.warn('⚠️ TypeScript compilation failed, attempting alternative compilation...');
+        console.warn('⚠️ TypeScript compilation failed:', compileError.message);
+        console.log('🔄 Attempting fallback compilation method...');
         // Fallback: copy and modify files manually
         await this.fallbackCompilation(strategyFiles);
       }
@@ -112,7 +117,7 @@ class StrategyLoader {
   }
 
   /**
-   * Fallback compilation method
+   * Fallback compilation method with improved error handling
    */
   async fallbackCompilation(strategyFiles) {
     console.log('🔄 Using fallback compilation method...');
@@ -121,38 +126,48 @@ class StrategyLoader {
       try {
         const tsContent = await fs.readFile(path.join(this.strategiesPath, file), 'utf8');
         
-        // Simple TypeScript to JavaScript conversion
+        // Enhanced TypeScript to JavaScript conversion
         let jsContent = tsContent
+          // Handle imports
           .replace(/import\s+{([^}]+)}\s+from\s+['"]([^'"]+)['"];?/g, (match, imports, modulePath) => {
-            if (modulePath === '../../types') {
+            if (modulePath === '../../types' || modulePath.includes('types')) {
               return '// Types removed for JS compatibility';
             }
-            return `const { ${imports.trim()} } = require('${modulePath}');`;
+            // Convert to CommonJS require
+            const cleanImports = imports.trim().replace(/\s+/g, ' ');
+            return `const { ${cleanImports} } = require('${modulePath}');`;
           })
+          // Handle default imports
+          .replace(/import\s+(\w+)\s+from\s+['"]([^'"]+)['"];?/g, 'const $1 = require(\'$2\');')
+          // Remove export keywords
           .replace(/export\s+class/g, 'class')
-          .replace(/: \w+\[\]/g, '')
-          .replace(/: \w+/g, '')
+          .replace(/export\s+default/g, 'module.exports =')
+          .replace(/export\s+\{([^}]+)\}/g, 'module.exports = { $1 }')
+          // Remove TypeScript type annotations
+          .replace(/:\s*\w+\[\]/g, '')
+          .replace(/:\s*\w+/g, '')
           .replace(/\?:/g, ':')
           .replace(/<[^>]+>/g, '')
+          // Fix method signatures
           .replace(/async\s+([\w]+)\s*\([^)]*\)\s*:\s*Promise<[^>]+>/g, 'async $1')
           .replace(/([\w]+)\s*\([^)]*\)\s*:\s*[\w<>\[\]]+/g, '$1')
+          // Remove access modifiers
           .replace(/private\s+/g, '')
           .replace(/protected\s+/g, '')
-          .replace(/public\s+/g, '');
+          .replace(/public\s+/g, '')
+          // Fix interface declarations
+          .replace(/interface\s+\w+\s*\{[^}]*\}/g, '')
+          // Add module.exports at the end if not present
+          .replace(/(class\s+(\w+)\s*\{[\s\S]*?\})(?!.*module\.exports)/g, '$1\n\nmodule.exports = $2;');
 
-        // Add module.exports
-        const className = file.replace('.ts', '').split('-').map(part => 
-          part.charAt(0).toUpperCase() + part.slice(1)
-        ).join('') + 'Strategy';
+        const jsFileName = file.replace('.ts', '.js');
+        const outputPath = path.join(this.compiledStrategiesPath, jsFileName);
         
-        jsContent += `\n\nmodule.exports = { ${className} };`;
-
-        const jsFile = file.replace('.ts', '.js');
-        await fs.writeFile(path.join(this.compiledStrategiesPath, jsFile), jsContent);
+        await fs.writeFile(outputPath, jsContent);
+        console.log(`✅ Converted ${file} to ${jsFileName}`);
         
-        console.log(`✅ Compiled ${file} -> ${jsFile}`);
       } catch (error) {
-        console.warn(`⚠️ Failed to compile ${file}:`, error.message);
+        console.error(`❌ Failed to convert ${file}:`, error.message);
       }
     }
   }

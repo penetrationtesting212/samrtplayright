@@ -40,3 +40,14 @@ visual-diffs/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Nested repo and heavy/local artifacts
+playwright-smart/
+playwright-report/
+playwright-report/data/
+recordings/
+test-screenshots/
+test-videos/
+database.sqlite
+database.backup.sqlite
+*.webm
