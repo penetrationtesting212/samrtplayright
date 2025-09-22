@@ -1,0 +1,10 @@
+# requirements.txt for ml_service
+tensorflow==2.15.0
+tensorflow-js
+numpy
+opencv-python
+Pillow
+scikit-image
+matplotlib
+flask
+requests

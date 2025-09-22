@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import NeuralNetworkService from './NeuralNetworkService.js';
+import EnhancedNeuralNetworkService from './EnhancedNeuralNetworkService.js';
 import similarity from 'similarity';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
  */
 class AIElementDetection {
   constructor() {
-    this.neuralService = new NeuralNetworkService();
+    this.neuralService = new EnhancedNeuralNetworkService();
     this.elementPatterns = new Map();
     this.trainingData = [];
     this.isModelTrained = false;

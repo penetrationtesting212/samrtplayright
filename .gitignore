@@ -28,8 +28,6 @@ dist-ssr
 allure-results/
 allure-report/
 
-
-
 # Visual testing artifacts
 test-results/
 screenshots/
@@ -51,3 +49,23 @@ test-videos/
 database.sqlite
 database.backup.sqlite
 *.webm
+
+# Python virtual environments and ML service artifacts
+ml_service/ml_env/
+ml_service/__pycache__/
+ml_service/*.pyc
+ml_service/*.pyo
+ml_service/*.pyd
+ml_service/.Python
+ml_service/env/
+ml_service/venv/
+ml_service/ENV/
+ml_service/env.bak/
+ml_service/venv.bak/
+
+# TensorFlow and ML artifacts
+*.pb
+*.h5
+*.tflite
+model_cache/
+training_data/
